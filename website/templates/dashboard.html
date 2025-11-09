@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Low Attendance Alerts</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+{% set flash_messages = get_flashed_messages(with_categories=true) %}
+<body class="dashboard" data-flash='{{ flash_messages | tojson | safe }}' data-template-max="{{ template_max_length }}">
+    <div class="dashboard-wrapper">
+        <header class="top-nav">
+            <div class="brand">
+                <div class="brand-indicator"></div>
+                <span>Attendance Monitor</span>
+            </div>
+            <div class="nav-actions">
+                <button class="nav-btn primary" id="uploadTrigger" type="button">Upload CSV &amp; Filter</button>
+                <button class="nav-btn success" id="sendAlertsTop" type="button">Send Email Alerts</button>
+                <a class="nav-btn ghost" href="{{ url_for('logout') }}">Sign Out</a>
+            </div>
+        </header>
+
+        <main class="dashboard-content">
+            <section class="panel panel-filter">
+                <h2>Filter Options</h2>
+                <form id="upload-form">
+                    <label class="file-upload">
+                        <span>Upload CSV File</span>
+                        <input type="file" name="file" id="csvFileInput" accept=".csv,.xlsx">
+                        <button type="button" class="upload-btn" id="fileBrowse">Upload CSV File</button>
+                        <span class="file-name" id="fileName">No file selected...</span>
+                    </label>
+                    <label class="threshold-label" for="thresholdSlider">Filter By Attendance (%)</label>
+                    <div class="slider-wrapper">
+                        <input type="range" id="thresholdSlider" name="threshold" min="0" max="100" step="1" value="75">
+                        <span class="slider-value"><span id="thresholdValue">75</span>%</span>
+                    </div>
+                    <button type="submit" class="primary-button small">Apply Filters</button>
+                </form>
+                <div class="panel-subtext">
+                    Upload a CSV/XLSX that includes: Roll Number, Student Name, Attendance %, Email, Phone Number. Course and extra columns are optional.
+                </div>
+            </section>
+
+            <section class="panel panel-table">
+                <div class="panel-header">
+                    <div>
+                        <h2>Filtered Students Table</h2>
+                        <p class="panel-subtext">Only students below the attendance threshold appear here.</p>
+                    </div>
+                    <div class="summary-cards" id="summaryCards">
+                        <article class="summary-card">
+                            <span class="label">Total Students</span>
+                            <span class="value" data-summary="total">0</span>
+                        </article>
+                        <article class="summary-card alert">
+                            <span class="label">Below Threshold</span>
+                            <span class="value" data-summary="below">0</span>
+                        </article>
+                        <article class="summary-card">
+                            <span class="label">Average Attendance</span>
+                            <span class="value" data-summary="average">0%</span>
+                        </article>
+                    </div>
+                </div>
+                <div class="table-wrapper">
+                    <table>
+                        <thead>
+                            <tr id="tableHeaderRow">
+                                <th class="select-col"><input type="checkbox" id="selectAll"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="studentsTable">
+                            <tr class="empty">
+                                <td colspan="7">Upload data and apply filters to see results.</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="table-actions">
+                    <div class="status-note">Red status = Below attendance threshold.</div>
+                    <div class="actions-group">
+                        <button type="button" class="ghost-button" id="clearSelection">Clear Selection</button>
+                        <button type="button" class="primary-button" id="sendAlerts">Send Email Alerts</button>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <section class="panel panel-plot">
+            <div class="panel-header">
+                <div>
+                    <h2>Attendance Insights</h2>
+                    <p class="panel-subtext">Charts update automatically based on the latest upload.</p>
+                </div>
+                <button type="button" class="ghost-button" id="refreshInsights">Refresh Insights</button>
+            </div>
+            <div class="insights-grid">
+                <article class="insight-card">
+                    <h3>AI Suggestions</h3>
+                    <ul class="insight-list" id="insightSuggestions">
+                        <li class="placeholder">Upload data to generate suggestions.</li>
+                    </ul>
+                </article>
+                <article class="insight-card">
+                    <h3>Key Metrics</h3>
+                    <dl class="insight-stats" id="insightStats"></dl>
+                </article>
+                <article class="insight-card wide">
+                    <h3>Lowest Attendance</h3>
+                    <div class="insight-table-wrapper">
+                        <table class="insight-table">
+                            <thead>
+                                <tr>
+                                    <th>Roll</th>
+                                    <th>Name</th>
+                                    <th>Course</th>
+                                    <th>Attendance</th>
+                                    <th>Email</th>
+                                    <th>Phone</th>
+                                </tr>
+                            </thead>
+                            <tbody id="insightLowestBody">
+                                <tr class="empty"><td colspan="6">No records yet.</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </article>
+            </div>
+            <div class="plots-grid">
+                <div class="plot-card">
+                    <h3>Attendance Distribution</h3>
+                    <canvas id="attendanceDistributionChart" height="180"></canvas>
+                </div>
+                <div class="plot-card">
+                    <h3>Average Attendance by Course</h3>
+                    <canvas id="courseAverageChart" height="180"></canvas>
+                </div>
+            </div>
+        </section>
+
+        <section class="panel panel-template">
+            <div class="panel-header">
+                <div>
+                    <h2>Email Alert Template</h2>
+                    <p class="panel-subtext">Personalise the alert that is sent when you trigger email notifications.</p>
+                </div>
+                <button type="button" class="primary-button small" id="templateSave" disabled>Save Template</button>
+            </div>
+            <form id="templateForm" class="template-form">
+                <label for="templateEditor">Message Body</label>
+                <textarea id="templateEditor" rows="8" spellcheck="false" placeholder="Enter your email template..." maxlength="{{ template_max_length }}"></textarea>
+                <div class="template-meta">
+                    <div>
+                        <span class="meta-label">Available placeholders:</span>
+                        <span id="templatePlaceholders" class="placeholder-list">Loading...</span>
+                    </div>
+                    <span class="meta-counter" id="templateCounter">0/{{ template_max_length }}</span>
+                </div>
+                <div class="template-feedback" id="templateStatus"></div>
+            </form>
+        </section>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="{{ url_for('static', filename='js/dashboard.js') }}" defer></script>
+</body>
+</html>
